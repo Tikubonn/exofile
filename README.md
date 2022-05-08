@@ -1,6 +1,10 @@
 
 # exofile
 
+![](https://img.shields.io/badge/version-0.9.0-gray)
+![](https://img.shields.io/badge/python-3.10-blue)
+![](https://img.shields.io/github/license/tikubonn/exofile)
+
 AviUtlのエクスポートファイルを編集するための基礎的なライブラリです。
 このライブラリを使用することで、エクスポートファイルの読み込み・書き出し・編集を行うことができます。
 ただし、文字通り基礎的な機能しか搭載されていませんので、より直観的な操作（例えばタイムライン上のオブジェクトを操作したり）をしたいのであれば[こちらのライブラリ](https://github.com/tikubonn/exolib)の使用を検討したほうがよいでしょう。
