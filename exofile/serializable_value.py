@@ -3,6 +3,7 @@ import re
 import base64
 from io import StringIO
 from abc import ABC, abstractmethod, abstractclassmethod
+from enum import Enum, unique 
 from collections import OrderedDict
 
 class SerializableValue (ABC):
@@ -168,3 +169,34 @@ class Boolean (int, SerializableValue):
       return cls(int(text))
     else:
       raise ValueError()
+
+@unique
+class TextType (Enum):
+
+  STANDARD_CHARACTER = Int(0)
+  SHADOWED_TEXT = Int(1)
+  SHADOWED_TEXT_THIN = Int(2)
+  BORDERED_TEXT = Int(3)
+  BORDERED_TEXT_THIN = Int(4)
+
+@unique
+class TextAlignment (Enum):
+
+  ALIGN_LEFT_TOP = Int(0)
+  ALIGN_CENTER_TOP = Int(1)
+  ALIGN_RIGHT_TOP = Int(2)
+  ALIGN_LEFT_MIDDLE = Int(3)
+  ALIGN_CENTER_MIDDLE = Int(4)
+  ALIGN_RIGHT_MIDDLE = Int(5)
+  ALIGN_LEFT_BOTTOM = Int(6)
+  ALIGN_CENTER_BOTTOM = Int(7)
+  ALIGN_RIGHT_BOTTOM = Int(8)
+  ALIGN_VERTICAL_TOP_RIGHT = Int(9)
+  ALIGN_VERTICAL_MIDDLE_RIGHT = Int(10)
+  ALIGN_VERTICAL_BOTTOM_RIGHT = Int(11)
+  ALIGN_VERTICAL_TOP_CENTER = Int(12)
+  ALIGN_VERTICAL_MIDDLE_CENTER = Int(13)
+  ALIGN_VERTICAL_BOTTOM_CENTER = Int(14)
+  ALIGN_VERTICAL_TOP_LEFT = Int(15)
+  ALIGN_VERTICAL_MIDDLE_LEFT = Int(16)
+  ALIGN_VERTICAL_BOTTOM_LEFT = Int(17)
