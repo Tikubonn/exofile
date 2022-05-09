@@ -173,7 +173,7 @@ class Boolean (int, SerializableValue):
 @unique
 class TextType (Enum):
 
-  STANDARD_CHARACTER = Int(0)
+  STANDARD_TEXT = Int(0)
   SHADOWED_TEXT = Int(1)
   SHADOWED_TEXT_THIN = Int(2)
   BORDERED_TEXT = Int(3)
