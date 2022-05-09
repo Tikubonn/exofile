@@ -3,7 +3,7 @@ import re
 import base64
 from io import StringIO
 from abc import ABC, abstractmethod, abstractclassmethod
-from enum import Enum, unique 
+from enum import IntEnum, unique, auto 
 from collections import OrderedDict
 
 class SerializableValue (ABC):
@@ -48,6 +48,12 @@ class Params (OrderedDict, SerializableValue):
 class Color (SerializableValue):
 
   def __init__ (self, *args):
+
+    """
+    Color(color) => copy
+    Color(red, green, blue) => new 
+    """
+
     if len(args) == 1:
       color, = args
       if isinstance(color, Color):
@@ -144,7 +150,7 @@ class Float (float, SerializableValue):
       signpart, intpart, decimalpart = matchresult.groups()
       return cls(text, decimalpartdigits=len(decimalpart))
     else:
-      raise ValueError()
+      raise ValueError("Could not deserialize {} to {}.".format(text, cls)) #error
 
 class Int (int, SerializableValue):
 
@@ -156,7 +162,7 @@ class Int (int, SerializableValue):
     if re.match(r"^-?\d+$", text):
       return cls(text)
     else:
-      raise ValueError()
+      raise ValueError("Could not deserialize {} to {}.".format(text, cls)) #error
 
 class Boolean (int, SerializableValue):
 
@@ -168,35 +174,161 @@ class Boolean (int, SerializableValue):
     if re.match(r"^[01]$", text):
       return cls(int(text))
     else:
-      raise ValueError()
+      raise ValueError("Could not deserialize {} to {}.".format(text, cls)) #error
 
 @unique
-class TextType (Enum):
+class TextType (IntEnum):
 
-  STANDARD_TEXT = Int(0)
-  SHADOWED_TEXT = Int(1)
-  SHADOWED_TEXT_THIN = Int(2)
-  BORDERED_TEXT = Int(3)
-  BORDERED_TEXT_THIN = Int(4)
+  STANDARD_TEXT = 0
+  SHADOWED_TEXT = auto()
+  SHADOWED_TEXT_THIN = auto()
+  BORDERED_TEXT = auto()
+  BORDERED_TEXT_THIN = auto()
 
 @unique
-class TextAlignment (Enum):
+class TextAlignment (IntEnum):
 
-  ALIGN_LEFT_TOP = Int(0)
-  ALIGN_CENTER_TOP = Int(1)
-  ALIGN_RIGHT_TOP = Int(2)
-  ALIGN_LEFT_MIDDLE = Int(3)
-  ALIGN_CENTER_MIDDLE = Int(4)
-  ALIGN_RIGHT_MIDDLE = Int(5)
-  ALIGN_LEFT_BOTTOM = Int(6)
-  ALIGN_CENTER_BOTTOM = Int(7)
-  ALIGN_RIGHT_BOTTOM = Int(8)
-  ALIGN_VERTICAL_TOP_RIGHT = Int(9)
-  ALIGN_VERTICAL_MIDDLE_RIGHT = Int(10)
-  ALIGN_VERTICAL_BOTTOM_RIGHT = Int(11)
-  ALIGN_VERTICAL_TOP_CENTER = Int(12)
-  ALIGN_VERTICAL_MIDDLE_CENTER = Int(13)
-  ALIGN_VERTICAL_BOTTOM_CENTER = Int(14)
-  ALIGN_VERTICAL_TOP_LEFT = Int(15)
-  ALIGN_VERTICAL_MIDDLE_LEFT = Int(16)
-  ALIGN_VERTICAL_BOTTOM_LEFT = Int(17)
+  ALIGN_LEFT_TOP = 0
+  ALIGN_CENTER_TOP = auto()
+  ALIGN_RIGHT_TOP = auto()
+  ALIGN_LEFT_MIDDLE = auto()
+  ALIGN_CENTER_MIDDLE = auto()
+  ALIGN_RIGHT_MIDDLE = auto()
+  ALIGN_LEFT_BOTTOM = auto()
+  ALIGN_CENTER_BOTTOM = auto()
+  ALIGN_RIGHT_BOTTOM = auto()
+  ALIGN_VERTICAL_TOP_RIGHT = auto()
+  ALIGN_VERTICAL_MIDDLE_RIGHT = auto()
+  ALIGN_VERTICAL_BOTTOM_RIGHT = auto()
+  ALIGN_VERTICAL_TOP_CENTER = auto()
+  ALIGN_VERTICAL_MIDDLE_CENTER = auto()
+  ALIGN_VERTICAL_BOTTOM_CENTER = auto()
+  ALIGN_VERTICAL_TOP_LEFT = auto()
+  ALIGN_VERTICAL_MIDDLE_LEFT = auto()
+  ALIGN_VERTICAL_BOTTOM_LEFT = auto()
+
+@unique
+class TrackBarType (IntEnum):
+
+  NONE = 0
+  LINEAR = auto()
+  ACCELERATION = auto()
+  CURVE = auto()
+  TELEPORTATION = auto()
+  IGNORE_MIDPOINT = auto()
+  RANDOM = auto()
+  REPETITION = auto() 
+
+class TrackBarRange (SerializableValue):
+
+  type = None 
+  type_pattern = None 
+
+  def __init__ (self, *args, **kwargs):
+
+    """
+    TrackBarRange(TrackBarRange) => copy 
+    TrackBarRange(TrackBarRange.type) => new 
+    TrackBarRange(start, end, TrackBarType, accelerate=False, decelerate=False, parameter=None) => new 
+    """
+
+    if len(args) == 1:
+      value, = args 
+      if isinstance(value, TrackBarRange):
+        self.start = value.start
+        self.end = value.end
+        self.tracktype = value.tracktype
+        self.accelerate = value.accelerate
+        self.decelerate = value.decelerate
+        self.parameter = value.parameter
+      else:
+        self.start = self.type(value)
+        self.end = self.type(value)
+        self.tracktype = TrackBarType.NONE
+        self.accelerate = False
+        self.decelerate = False
+        self.parameter = None 
+    elif len(args) == 3:
+      start, end, tracktype = args
+      self.start = self.type(start)
+      self.end = self.type(end)
+      self.tracktype = tracktype
+      self.accelerate = kwargs.get("accelerate", False)
+      self.decelerate = kwargs.get("decelerate", False)
+      self.parameter = kwargs.get("parameter", None)
+    else:
+      raise ValueError("Argument count must be 1 or 3.")
+
+  @classmethod
+  def parse_flags (cls, flags):
+    trackid = flags & 0b0001111
+    accelerate = 0 < flags & 0b1000000
+    decelerate = 0 < flags & 0b0100000
+    return trackid, accelerate, decelerate
+
+  @classmethod
+  def unparse_flags (cls, trackid, accelerate, decelerate):
+    accelerateflag = 0b1000000 if accelerate else 0
+    decelerateflag = 0b0100000 if decelerate else 0
+    return trackid | accelerateflag | decelerateflag
+
+  def serialize (self):
+    with StringIO() as buffer:
+      if self.tracktype == TrackBarType.NONE:
+        buffer.write(serialize_value(self.start))
+        return buffer.getvalue()
+      else:
+        buffer.write(serialize_value(self.start))
+        buffer.write(",")
+        buffer.write(serialize_value(self.end))
+        buffer.write(",")
+        if isinstance(self.tracktype, str):
+          flags = self.unparse_flags(0b1111, self.accelerate, self.decelerate)
+          buffer.write("{:d}@{:s}".format(flags, self.tracktype))
+        elif isinstance(self.tracktype, int):
+          flags = self.unparse_flags(self.tracktype, self.accelerate, self.decelerate)
+          buffer.write("{:d}".format(flags))
+        else:
+          raise ValueError()
+        if self.parameter is not None:
+          buffer.write(",")
+          buffer.write(serialize_value(self.parameter))
+        return buffer.getvalue()
+
+  @classmethod
+  def deserialize (cls, text):
+    matchresult = re.match("({}),({}),(\\d+)@(.+),(\\d+)$".format(cls.type_pattern, cls.type_pattern), text)
+    if matchresult:
+      start, end, idandflags, trackname, parameter = matchresult.groups()
+      trackid, accelerate, decelerate = cls.parse_flags(int(idandflags))
+      return cls(cls.type.deserialize(start), cls.type.deserialize(end), trackname, accelerate=accelerate, decelerate=decelerate, parameter=int(parameter))
+    matchresult = re.match("({}),({}),(\\d+),(\\d+)$".format(cls.type_pattern, cls.type_pattern), text)
+    if matchresult:
+      start, end, idandflags, parameter = matchresult.groups()
+      trackid, accelerate, decelerate = cls.parse_flags(int(idandflags))
+      return cls(cls.type.deserialize(start), cls.type.deserialize(end), int(trackid), accelerate=accelerate, decelerate=decelerate, parameter=int(parameter))
+    matchresult = re.match("({}),({}),(\\d+)@(.+)$".format(cls.type_pattern, cls.type_pattern), text)
+    if matchresult:
+      start, end, idandflags, trackname = matchresult.groups()
+      trackid, accelerate, decelerate = cls.parse_flags(int(idandflags))
+      return cls(cls.type.deserialize(start), cls.type.deserialize(end), trackname, accelerate=accelerate, decelerate=decelerate)
+    matchresult = re.match("({}),({}),(\\d+)$".format(cls.type_pattern, cls.type_pattern), text)
+    if matchresult:
+      start, end, idandflags = matchresult.groups()
+      trackid, accelerate, decelerate = cls.parse_flags(int(idandflags))
+      return cls(cls.type.deserialize(start), cls.type.deserialize(end), int(trackid), accelerate=accelerate, decelerate=decelerate)
+    matchresult = re.match("({})$".format(cls.type_pattern), text)
+    if matchresult:
+      value, = matchresult.groups()
+      return cls(cls.type.deserialize(value))
+    raise ValueError("Could not deserialize text {} to {}.".format(text, cls)) #error
+
+class IntTrackBarRange (TrackBarRange):
+
+  type = Int
+  type_pattern = "-?\\d+"
+
+class FloatTrackBarRange (TrackBarRange):
+
+  type = Float
+  type_pattern = "-?\\d+\\.\\d+"
