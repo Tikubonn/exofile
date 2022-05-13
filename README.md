@@ -1,7 +1,7 @@
 
 # exofile
 
-![](https://img.shields.io/badge/version-0.10.0-gray)
+![](https://img.shields.io/badge/version-0.11.0-gray)
 ![](https://img.shields.io/badge/python-3.10-blue)
 ![](https://img.shields.io/github/license/tikubonn/exofile)
 
@@ -138,6 +138,8 @@ exofileは直列化のためにこれらのデータ型を提供しています�
 | `TrackBarType`       | トラックバーによる遷移アニメーションの種類を示す列挙型です。例を挙げると`LINEAR`（直線移動）や`ACCELERATION`（加減速）などがあります。 | 
 | `IntTrackBarRange`   | 整数の範囲を示すデータ型です。このデータ型はトラックバーによる遷移アニメーションで使用されます。 | 
 | `FloatTrackBarRange` | 整数の範囲を示すデータ型です。このデータ型はトラックバーによる遷移アニメーションで使用されます。 | 
+| `ShapeType`          | 図形の種類を示す列挙型です。例を挙げると`CIRCLE`（円）や`SQUARE`（四角形）などがあります。 | 
+| `ShapeName`          | 一般的な文字列型です。`.serialize`されたときに文字列が空でなければ先頭に文字`*`を追加します。このデータ型は図形オブジェクトの`name`部分で使用されます。 | 
 
 ## Install
 

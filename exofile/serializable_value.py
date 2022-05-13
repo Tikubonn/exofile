@@ -134,10 +134,25 @@ class String (str, SerializableValue):
 
 class Float (float, SerializableValue):
 
+  """
+  Float(Float) => copy 
+  Float(float, decimalpartdigits=1) => new 
+  """
+
   def __new__ (cls, *args, decimalpartdigits=1, **kwargs):
-    self = float.__new__(cls, *args, **kwargs)
-    self.decimalpartdigits = decimalpartdigits
-    return self 
+    if args:
+      if isinstance(args[0], Float):
+        self = float.__new__(cls, *args, **kwargs)
+        self.decimalpartdigits = args[0].decimalpartdigits
+        return self 
+      else:
+        self = float.__new__(cls, *args, **kwargs)
+        self.decimalpartdigits = decimalpartdigits
+        return self 
+    else:
+      self = float.__new__(cls, *args, **kwargs)
+      self.decimalpartdigits = decimalpartdigits
+      return self 
 
   def serialize (self):
     fm = "{:.0" + format(self.decimalpartdigits, "d") + "f}"
@@ -211,13 +226,14 @@ class TextAlignment (IntEnum):
 class TrackBarType (IntEnum):
 
   NONE = 0
-  LINEAR = auto()
-  ACCELERATION = auto()
-  CURVE = auto()
-  TELEPORTATION = auto()
-  IGNORE_MIDPOINT = auto()
-  RANDOM = auto()
-  REPETITION = auto() 
+  LINEAR = 1
+  ACCELERATION = 7 
+  CURVE = 2
+  TELEPORTATION = 3
+  IGNORE_MIDPOINT = 4
+  MOVE_CERTAIN_AMOUNT = 5 #移動量指定
+  RANDOM = 6
+  REPETITION = 8
 
 class TrackBarRange (SerializableValue):
 
@@ -237,22 +253,22 @@ class TrackBarRange (SerializableValue):
       if isinstance(value, TrackBarRange):
         self.start = value.start
         self.end = value.end
-        self.tracktype = value.tracktype
+        self.trackbartype = value.trackbartype
         self.accelerate = value.accelerate
         self.decelerate = value.decelerate
         self.parameter = value.parameter
       else:
         self.start = self.type(value)
         self.end = self.type(value)
-        self.tracktype = TrackBarType.NONE
+        self.trackbartype = TrackBarType.NONE
         self.accelerate = False
         self.decelerate = False
         self.parameter = None 
     elif len(args) == 3:
-      start, end, tracktype = args
+      start, end, trackbartype = args
       self.start = self.type(start)
       self.end = self.type(end)
-      self.tracktype = tracktype
+      self.trackbartype = trackbartype
       self.accelerate = kwargs.get("accelerate", False)
       self.decelerate = kwargs.get("decelerate", False)
       self.parameter = kwargs.get("parameter", None)
@@ -274,7 +290,7 @@ class TrackBarRange (SerializableValue):
 
   def serialize (self):
     with StringIO() as buffer:
-      if self.tracktype == TrackBarType.NONE:
+      if self.trackbartype == TrackBarType.NONE:
         buffer.write(serialize_value(self.start))
         return buffer.getvalue()
       else:
@@ -282,11 +298,11 @@ class TrackBarRange (SerializableValue):
         buffer.write(",")
         buffer.write(serialize_value(self.end))
         buffer.write(",")
-        if isinstance(self.tracktype, str):
+        if isinstance(self.trackbartype, str):
           flags = self.unparse_flags(0b1111, self.accelerate, self.decelerate)
-          buffer.write("{:d}@{:s}".format(flags, self.tracktype))
-        elif isinstance(self.tracktype, int):
-          flags = self.unparse_flags(self.tracktype, self.accelerate, self.decelerate)
+          buffer.write("{:d}@{:s}".format(flags, self.trackbartype))
+        elif isinstance(self.trackbartype, int):
+          flags = self.unparse_flags(self.trackbartype, self.accelerate, self.decelerate)
           buffer.write("{:d}".format(flags))
         else:
           raise ValueError()
@@ -332,3 +348,32 @@ class FloatTrackBarRange (TrackBarRange):
 
   type = Float
   type_pattern = "-?\\d+\\.\\d+"
+
+@unique 
+class ShapeType (IntEnum):
+
+  CIRCLE = 1
+  SQUARE = 2
+  TRIANGLE = 3
+  PENTAGON = 4
+  HEXAGON = 5
+  STAR = 6
+  FILE = 0 #これを選択した場合nameパラメータの先頭に*を付与しなければなりません。
+
+class ShapeName (str):
+
+  def serialize (self):
+    if self:
+      return "*" + self
+    else:
+      return ""
+
+  @classmethod
+  def deserialize (cls, text):
+    if text:
+      if text.startswith("*"):
+        return cls(text[1:])
+      else:
+        raise ValueError("{} must starts with *.".format(text)) #error 
+    else:
+      return cls("")
