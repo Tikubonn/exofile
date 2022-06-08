@@ -3,7 +3,7 @@ import re
 import base64
 from io import StringIO
 from abc import ABC, abstractmethod, abstractclassmethod
-from enum import IntEnum, unique, auto 
+from enum import Enum, IntEnum, unique, auto 
 from collections import OrderedDict
 
 class SerializableValue (ABC):
@@ -21,29 +21,6 @@ def serialize_value (value):
     return value.serialize()    
   else:
     return str(value)
-
-class Params (OrderedDict, SerializableValue):
-
-  def serialize (self):
-    with StringIO() as buffer:
-      for key, value in self.items():
-        buffer.write('{}="{}";'.format(key, serialize_value(value)))
-      return buffer.getvalue()
-
-  @classmethod
-  def deserialize (cls, text):
-    params = Params()
-    tx = text
-    while tx:
-      matchresult = re.match(r'(.+?)="(.+?)";', tx)
-      if matchresult:
-        start, end = matchresult.span()
-        key, value = matchresult.groups()
-        params[key] = value
-        tx = tx[end:]
-      else:
-        break
-    return params
 
 class Color (SerializableValue):
 
@@ -87,7 +64,7 @@ class Color (SerializableValue):
       raise ValueError()
 
   @classmethod
-  def deserialize (cls, text:str) -> "Color":
+  def deserialize (cls, text):
     if len(text) == 6:
       red = int(text[0:2], 16)
       green = int(text[2:4], 16)
@@ -99,16 +76,17 @@ class Color (SerializableValue):
 class Text (str, SerializableValue):
 
   MAX_SERIALIZED_LENGTH = 4096
-  MAX_DESERIALIZED_LENGTH = 4096 // 2 // 2 - 1
+  MAX_DESERIALIZED_LENGTH = 4096 // 2 // 2 #MAX_SERIALIZED_LENGTH // utf-16(2) // base16-encode(2)
 
   def serialize (self):
-    if len(self) <= self.MAX_DESERIALIZED_LENGTH:
-      encoded = self.encode("utf-16-le")
-      b16encoded = base64.b16encode(encoded).decode("ascii").lower()
+    rnconverted = self.replace("\n", "\r\n") #tmp
+    rnencoded = rnconverted.encode("utf-16-le") 
+    b16encoded = base64.b16encode(rnencoded).decode("ascii").lower()
+    if len(b16encoded) <= self.MAX_SERIALIZED_LENGTH:
       padding = "0" * (self.MAX_SERIALIZED_LENGTH - len(b16encoded))
       return b16encoded + padding
     else:
-      raise ValueError("Length of text for serializing is over {:d}.".format(self.MAX_DESERIALIZED_LENGTH)) #error
+      raise ValueError("Serialized text's length must be under {:d}.".format(self.MAX_SERIALIZED_LENGTH)) #error
 
   @classmethod
   def deserialize (cls, text):
@@ -117,7 +95,7 @@ class Text (str, SerializableValue):
       decoded = b16decoded.decode("utf-16-le")
       foundnulindex = decoded.find("\0")
       if 0 <= foundnulindex:
-        return Text(decoded[:foundnulindex])
+        return Text(decoded[:foundnulindex].replace("\r\n", "\n")) #change newline to '\n' only.
       else:
         raise ValueError("Could not find NUL character into deserialized text.") #error
     else:
@@ -138,6 +116,8 @@ class Float (float, SerializableValue):
   Float(Float) => copy 
   Float(float, decimalpartdigits=1) => new 
   """
+
+  PATTERN = r"^(-?)(\d+)\.(\d+)$"
 
   def __new__ (cls, *args, decimalpartdigits=1, **kwargs):
     if args:
@@ -160,7 +140,7 @@ class Float (float, SerializableValue):
 
   @classmethod
   def deserialize (cls, text):
-    matchresult = re.match(r"^(-?)(\d+)\.(\d+)$", text)
+    matchresult = re.match(cls.PATTERN, text)
     if matchresult:
       signpart, intpart, decimalpart = matchresult.groups()
       return cls(text, decimalpartdigits=len(decimalpart))
@@ -169,27 +149,104 @@ class Float (float, SerializableValue):
 
 class Int (int, SerializableValue):
 
+  PATTERN = r"^-?\d+$"
+
   def serialize (self):
     return "{:d}".format(self)
 
   @classmethod
   def deserialize (cls, text):
-    if re.match(r"^-?\d+$", text):
+    if re.match(cls.PATTERN, text):
       return cls(text)
     else:
       raise ValueError("Could not deserialize {} to {}.".format(text, cls)) #error
 
 class Boolean (int, SerializableValue):
 
+  PATTERN = r"^[01]$"
+
   def serialize (self):
     return "{:d}".format(self)
 
   @classmethod
   def deserialize (cls, text):
-    if re.match(r"^[01]$", text):
+    if re.match(cls.PATTERN, text):
       return cls(int(text))
     else:
       raise ValueError("Could not deserialize {} to {}.".format(text, cls)) #error
+
+class ParamColor (Color):
+
+  PATTERN = r"^0x([0-9a-fA-F]{6})$"
+
+  def serialize (self):
+    return "0x{:s}".format(super().serialize())
+
+  @classmethod
+  def deserialize (cls, text):
+    matchresult = re.match(cls.PATTERN, text)
+    if matchresult:
+      colorcode, = matchresult.groups()
+      return super().deserialize(colorcode)
+    else:
+      raise ValueError("Could not deserialize {!r} to {!r}.".format(text, cls)) #error
+
+class ParamString (String):
+
+  PATTERN = r'^"(.*)"$'
+
+  def serialize (self):
+    if ";" in self:
+      raise ValueError("Reserved character ';' in {:s}, its may cause a loading error at import.".format(self)) #error
+    elif '"' in self:
+      raise ValueError("Reserved character '\"' in {:s}, its may cause a loading error at import.".format(self)) #error
+    else:
+      return '"{}"'.format(self.replace("\\", "\\\\"))
+
+  @classmethod
+  def deserialize (cls, text):
+    matchresult = re.match(cls.PATTERN, text)
+    if matchresult:
+      te, = matchresult.groups()
+      return cls(te)
+    else:
+      raise ValueError("Could not deserialize {!r} to {!r}.".format(text, cls)) #error
+
+class Param (OrderedDict, SerializableValue):
+
+  deserialization_type_table = {
+    ParamColor.PATTERN: ParamColor,
+    ParamString.PATTERN: ParamString,
+    Int.PATTERN: Int,
+    Float.PATTERN: Float,
+    #Boolean.PATTERN: Boolean, #真偽値か整数かの区別がつかないので保留します
+  }
+
+  def serialize (self):
+    with StringIO() as buffer:
+      for key, value in self.items():
+        buffer.write("{}={};".format(key, serialize_value(value)))
+      return buffer.getvalue()
+
+  @classmethod
+  def deserialize (cls, text):
+    param = Param()
+    tx = text
+    while tx:
+      matchresult = re.match(r"(.+?)=\s*(.+?);", tx)
+      if matchresult:
+        start, end = matchresult.span()
+        key, value = matchresult.groups()
+        for despattern, destype in cls.deserialization_type_table.items():
+          if re.match(despattern, value):
+            param[key] = destype.deserialize(value)
+            break
+        else:
+          param[key] = value 
+        tx = tx[end:]
+      else:
+        break
+    return param
 
 @unique
 class TextType (IntEnum):
@@ -349,7 +406,17 @@ class FloatTrackBarRange (TrackBarRange):
   type = Float
   type_pattern = "-?\\d+\\.\\d+"
 
-@unique 
+class FigureName (Enum): #--dialog:figure/fig,figure="四角形";などで用いられる図形名
+
+  CIRCLE = "円"
+  SQUARE = "四角形"
+  TRIANGLE = "三角形"
+  PENTAGON = "五角形"
+  HEXAGON = "六角形"
+  STAR = "星型"
+  #FILE = "" 
+  BACKGROUND = "背景"
+
 class ShapeType (IntEnum):
 
   CIRCLE = 1
@@ -359,6 +426,7 @@ class ShapeType (IntEnum):
   HEXAGON = 5
   STAR = 6
   FILE = 0 #これを選択した場合nameパラメータの先頭に*を付与しなければなりません。
+  BACKGROUND = 0
 
 class ShapeName (str):
 
